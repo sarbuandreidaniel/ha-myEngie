@@ -135,6 +135,29 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 for key, item in value.items():
                     lower_key = key.lower()
 
+                    # Handle places_of_consumption specific structure
+                    if lower_key == "places_of_consumption" and isinstance(item, list):
+                        for place in item:
+                            if isinstance(place, dict):
+                                # Extract pa (provider account)
+                                if "pa" in place and place["pa"] and not self.provider_account_id:
+                                    self.provider_account_id = str(place["pa"])
+                                    _LOGGER.debug("Extracted provider_account_id (pa): %s from places_of_consumption", self.provider_account_id)
+
+                                # Extract poc_number
+                                if "poc_number" in place and place["poc_number"] and not self.poc_number:
+                                    self.poc_number = str(place["poc_number"])
+                                    _LOGGER.debug("Extracted poc_number: %s from places_of_consumption", self.poc_number)
+
+                                # Extract contract accounts from cont_contract
+                                if "cont_contract" in place and isinstance(place["cont_contract"], list):
+                                    for contract in place["cont_contract"]:
+                                        if isinstance(contract, dict) and "contract_account_number" in contract:
+                                            contract_num = str(contract["contract_account_number"])
+                                            if contract_num not in self.contract_accounts:
+                                                self.contract_accounts.append(contract_num)
+                                                _LOGGER.debug("Extracted contract_account_number: %s from places_of_consumption", contract_num)
+
                     if lower_key in ("contract_account", "contract_account_id", "contractaccount", "contractAccount", "contract_accountid", "contractAccountId", "contract_account_number", "contractaccountnumber", "contractAccountNumber"):
                         if isinstance(item, (list, tuple)):
                             for x in item:
@@ -242,6 +265,13 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 if not places.get("error"):
                     self._extract_account_info(places.get("data"))
                     _LOGGER.debug("Extracted account info from places")
+
+            # If still no contract accounts, try placesofconsumption
+            if not self.contract_accounts:
+                placesofconsumption = await self.api.get_placesofconsumption()
+                if not placesofconsumption.get("error"):
+                    self._extract_account_info(placesofconsumption.get("data"))
+                    _LOGGER.debug("Extracted account info from placesofconsumption")
             notifications = await self.api.get_unread_notifications()
             notification_count = 0
             if not notifications.get("error"):

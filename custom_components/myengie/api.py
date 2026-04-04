@@ -109,9 +109,9 @@ class MyEngieAPI:
         """Get places of consumption."""
         return await self._request("GET", f"{API_BASE_URL}/v1/places")
 
-    async def get_places(self) -> Dict[str, Any]:
-        """Get places of consumption."""
-        return await self._request("GET", f"{API_BASE_URL}/v1/places")
+    async def get_placesofconsumption(self) -> Dict[str, Any]:
+        """Get places of consumption data."""
+        return await self._request("GET", f"{API_BASE_URL}/v1/placesofconsumption")
 
     async def _request(
         self,
