@@ -36,6 +36,10 @@ async def async_setup_entry(
         MyEngieUpToDateStatusSensor(coordinator, config_entry),
         MyEngieInvoiceCountSensor(coordinator, config_entry),
         MyEngiePendingPaymentsSensor(coordinator, config_entry),
+        
+        # Invoice history and details
+        MyEngieLatestInvoiceSensor(coordinator, config_entry),
+        MyEngieInvoiceHistoryDetailsSensor(coordinator, config_entry),
     ]
 
     async_add_entities(entities)
@@ -341,6 +345,143 @@ class MyEngiePendingPaymentsSensor(CoordinatorEntity, SensorEntity):
                 ]
             }
         return {"pending_count": 0}
+
+    @property
+    def device_info(self):
+        """Return device info."""
+        return {
+            "identifiers": {(DOMAIN, self.config_entry.entry_id)},
+            "name": "MyEngie",
+            "manufacturer": "ENGIE Romania",
+        }
+
+
+class MyEngieLatestInvoiceSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for latest invoice details."""
+
+    _attr_name = "MyEngie Latest Invoice"
+    _attr_icon = "mdi:file-invoice"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_native_unit_of_measurement = "RON"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self._attr_unique_id = (
+            f"{DOMAIN}_{config_entry.entry_id}_latest_invoice"
+        )
+
+    @property
+    def native_value(self):
+        """Return the latest invoice amount."""
+        if self.coordinator.data:
+            invoices = self.coordinator.data.get("invoices", [])
+            if invoices:
+                # Get the first (most recent) invoice amount
+                amount = invoices[0].get("amount")
+                if amount:
+                    try:
+                        return float(amount)
+                    except (ValueError, TypeError):
+                        return None
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        """Return latest invoice details."""
+        if not self.coordinator.data:
+            return {}
+
+        invoices = self.coordinator.data.get("invoices", [])
+        if invoices:
+            latest = invoices[0]
+            return {
+                "date": latest.get("date"),
+                "amount": latest.get("amount"),
+                "status": latest.get("status"),
+                "due_date": latest.get("due_date"),
+            }
+        return {}
+
+    @property
+    def device_info(self):
+        """Return device info."""
+        return {
+            "identifiers": {(DOMAIN, self.config_entry.entry_id)},
+            "name": "MyEngie",
+            "manufacturer": "ENGIE Romania",
+        }
+
+
+class MyEngieInvoiceHistoryDetailsSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for invoice history details."""
+
+    _attr_name = "MyEngie Invoice History"
+    _attr_icon = "mdi:file-document-multiple"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self.config_entry = config_entry
+        self._attr_unique_id = (
+            f"{DOMAIN}_{config_entry.entry_id}_invoice_history"
+        )
+
+    @property
+    def native_value(self):
+        """Return summary of invoice history."""
+        if self.coordinator.data:
+            invoices = self.coordinator.data.get("invoices", [])
+            if invoices:
+                # Calculate average invoice amount
+                try:
+                    total = sum(
+                        float(inv.get("amount", 0)) 
+                        for inv in invoices
+                        if inv.get("amount")
+                    )
+                    average = total / len(invoices) if invoices else 0
+                    return f"{average:.2f} RON (avg)"
+                except (ValueError, TypeError):
+                    return f"{len(invoices)} invoices"
+            return "No invoices"
+        return None
+
+    @property
+    def extra_state_attributes(self):
+        """Return invoice history details."""
+        if not self.coordinator.data:
+            return {}
+
+        invoices = self.coordinator.data.get("invoices", [])
+        if invoices:
+            try:
+                total_amount = sum(
+                    float(inv.get("amount", 0)) 
+                    for inv in invoices
+                    if inv.get("amount")
+                )
+                average_amount = total_amount / len(invoices)
+            except (ValueError, TypeError):
+                total_amount = 0
+                average_amount = 0
+
+            return {
+                "invoice_count": len(invoices),
+                "total_amount": f"{total_amount:.2f}",
+                "average_amount": f"{average_amount:.2f}",
+                "invoices": [
+                    {
+                        "date": inv.get("date"),
+                        "amount": inv.get("amount"),
+                        "status": inv.get("status"),
+                        "due_date": inv.get("due_date"),
+                    }
+                    for inv in invoices[:10]  # Last 10 invoices
+                ]
+            }
+        return {"invoice_count": 0}
 
     @property
     def device_info(self):
