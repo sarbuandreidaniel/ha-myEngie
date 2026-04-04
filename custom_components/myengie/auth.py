@@ -119,12 +119,14 @@ class Auth0Manager:
                 "client_id": CLIENT_ID,
                 "grant_type": "refresh_token",
                 "refresh_token": self.refresh_token,
+                "scope": "openid profile email offline_access",
+                "audience": "https://myservices.engie.ro",
             }
 
             async with session.post(
                 f"{AUTH0_ENDPOINT}/oauth/token",
-                json=refresh_data,
-                headers={"Content-Type": "application/json"},
+                data=refresh_data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
             ) as resp:
                 if resp.status == 200:
                     token_data = await resp.json()

@@ -135,15 +135,16 @@ class MyEngieAPI:
             ) as response:
                 if response.status == 200:
                     return await response.json()
-                elif response.status == 401:
-                    # Token might be invalid, try refresh
-                    _LOGGER.debug("Got 401, attempting token refresh")
+                elif response.status in (400, 401):
+                    # Token may be expired or invalid, try refresh once
+                    error_text = await response.text()
+                    _LOGGER.debug("Auth error response: %s", error_text)
+                    _LOGGER.debug("Attempting token refresh due to auth response")
                     if await self.auth_manager.refresh_access_token(self.session):
                         # Retry request with new token
                         return await self._request(method, url, params, data)
-                    else:
-                        _LOGGER.error("Token refresh failed after 401 response")
-                        return {"error": True, "data": {}, "reason": "unauthorized"}
+                    _LOGGER.error("Token refresh failed after auth failure")
+                    return {"error": True, "data": {}, "reason": "unauthorized"}
                 else:
                     _LOGGER.error(
                         "API request failed: %s %s - Status: %s",

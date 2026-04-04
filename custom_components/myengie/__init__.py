@@ -96,6 +96,12 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
         self.auth_manager: Auth0Manager | None = None
         self.api: MyEngieAPI | None = None
         self._account_data = {}
+        self.contract_accounts: list[str] = []
+        self.account_id: str = ""
+        self.provider_account_id: str = ""
+        self.poc_number: str = ""
+        self.installation_number: str = ""
+        self.pod: str = ""
         self._is_initialized = False
 
     async def _async_authenticate(self) -> bool:
@@ -124,6 +130,51 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Authentication error: %s", err)
             return False
 
+    def _extract_account_info(self, raw_data: dict | list | None) -> None:
+        """Extract account identifiers from API responses."""
+        if raw_data is None:
+            return
+
+        def search(value: object) -> None:
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    lower_key = key.lower()
+
+                    if lower_key in ("contract_account", "contract_account_id"):
+                        if isinstance(item, (list, tuple)):
+                            self.contract_accounts.extend(str(x) for x in item if x)
+                        elif item:
+                            self.contract_accounts.append(str(item))
+                    elif lower_key in ("provider_account_id", "pa", "provider_id"):
+                        if item:
+                            self.provider_account_id = str(item)
+                    elif lower_key in ("poc_number", "poc", "connection_point"):
+                        if item:
+                            self.poc_number = str(item)
+                    elif lower_key in ("installation_number", "installation_id"):
+                        if item:
+                            self.installation_number = str(item)
+                    elif lower_key in ("pod", "point_of_delivery"):
+                        if item:
+                            self.pod = str(item)
+                    elif lower_key in ("account_id", "id") and not self.account_id:
+                        if item and str(item).isdigit():
+                            self.account_id = str(item)
+
+                    search(item)
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    search(item)
+
+        search(raw_data)
+
+        # Use contract account as account_id if not already set
+        if not self.account_id and self.contract_accounts:
+            self.account_id = self.contract_accounts[0]
+
+        # Normalize unique accounts
+        self.contract_accounts = list(dict.fromkeys(self.contract_accounts))
+
     async def _async_update_data(self) -> dict:
         """Fetch data from MyEngie API."""
         try:
@@ -137,10 +188,11 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
 
             _LOGGER.debug("Fetching data from MyEngie API")
 
-            # Fetch app status first
+            # Fetch app status first and extract account identifiers
             status = await self.api.get_app_status()
             if status.get("error"):
                 _LOGGER.warning("App status check failed")
+            self._extract_account_info(status.get("data"))
 
             # Fetch account data - get unread notifications
             notifications = await self.api.get_unread_notifications()
@@ -151,58 +203,78 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 except (ValueError, TypeError):
                     notification_count = 0
 
-            # Fetch balance and invoices
-            balance_details = await self.api.get_balance_details([])
+            # Fetch balance and invoices when contract accounts are available
+            balance_details = {"error": True}
             total_balance = "0.00"
             invoices = []
             pending = []
-            if not balance_details.get("error"):
-                data = balance_details.get("data", {})
-                total_balance = data.get("total", "0.00")
-                invoices = data.get("invoices", [])
-                pending = data.get("pending", [])
+            if self.contract_accounts:
+                balance_details = await self.api.get_balance_details(self.contract_accounts)
+                if not balance_details.get("error"):
+                    data = balance_details.get("data", {})
+                    total_balance = data.get("total", "0.00")
+                    invoices = data.get("invoices", [])
+                    pending = data.get("pending", [])
+            else:
+                _LOGGER.warning("No contract accounts available, skipping balance and invoice fetch")
 
-            # Fetch index data (gas consumption)
+            # Fetch index data (gas consumption) if parameters are available
             gas_index = None
             next_read_dates = None
             index_history = []
-            
-            # Try to get index data with basic parameters
-            # In a real scenario, we'd need to get these from user preferences
-            try:
-                index_data = await self.api.get_index_data(
-                    poc_number="",
-                    division="gaz",
-                    pa="",
-                    installation_number="",
+            if self.poc_number and self.provider_account_id and self.installation_number:
+                try:
+                    index_data = await self.api.get_index_data(
+                        poc_number=self.poc_number,
+                        division="gaz",
+                        pa=self.provider_account_id,
+                        installation_number=self.installation_number,
+                    )
+                    if not index_data.get("error"):
+                        installations = index_data.get("data", [])
+                        if installations:
+                            first_inst = installations[0].get("installations", [])
+                            if first_inst:
+                                gas_index = first_inst[0].get("last_index", 0)
+                                next_read_dates = first_inst[0].get("next_read_dates")
+                except Exception as err:
+                    _LOGGER.debug("Could not fetch index data: %s", err)
+            else:
+                _LOGGER.warning(
+                    "Index fetch skipped because POC/PA/installation data are missing: poc=%s pa=%s installation=%s",
+                    self.poc_number,
+                    self.provider_account_id,
+                    self.installation_number,
                 )
-                if not index_data.get("error"):
-                    installations = index_data.get("data", [])
-                    if installations:
-                        first_inst = installations[0].get("installations", [])
-                        if first_inst:
-                            gas_index = first_inst[0].get("last_index", 0)
-                            next_read_dates = first_inst[0].get("next_read_dates")
-            except Exception as err:
-                _LOGGER.debug("Could not fetch index data: %s", err)
 
-            # Fetch balance widget
-            balance_widget = await self.api.get_balance_widget([])
+            # Fetch balance widget only with contract accounts
+            balance_widget = {"error": True}
             balance_details_data = {}
-            if not balance_widget.get("error"):
-                balance_details_data = balance_widget.get("data", {})
+            if self.contract_accounts:
+                balance_widget = await self.api.get_balance_widget(self.contract_accounts)
+                if not balance_widget.get("error"):
+                    balance_details_data = balance_widget.get("data", {})
+            else:
+                _LOGGER.warning("No contract accounts available, skipping balance widget fetch")
 
-            # Get notifications banner
+            # Get notifications banner if account ID and PA available
             banners = []
-            try:
-                banner_data = await self.api.get_notifications_banner(
-                    account_id="",
-                    pa="",
+            if self.account_id and self.provider_account_id:
+                try:
+                    banner_data = await self.api.get_notifications_banner(
+                        account_id=self.account_id,
+                        pa=self.provider_account_id,
+                    )
+                    if not banner_data.get("error"):
+                        banners = [banner_data.get("data", {})]
+                except Exception as err:
+                    _LOGGER.debug("Could not fetch banners: %s", err)
+            else:
+                _LOGGER.warning(
+                    "Banner fetch skipped because account_id or pa is missing: account_id=%s pa=%s",
+                    self.account_id,
+                    self.provider_account_id,
                 )
-                if not banner_data.get("error"):
-                    banners = [banner_data.get("data", {})]
-            except Exception as err:
-                _LOGGER.debug("Could not fetch banners: %s", err)
 
             # Compile data
             data = {
