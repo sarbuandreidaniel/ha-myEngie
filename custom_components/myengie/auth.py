@@ -149,6 +149,15 @@ class Auth0Manager:
                         resp.status,
                         error_text,
                     )
+                    # Try to parse error for better diagnostics
+                    try:
+                        error_json = json.loads(error_text)
+                        if error_json.get("error") == "invalid_grant":
+                            _LOGGER.error("Auth0: Invalid grant - refresh token may be expired or invalid")
+                        else:
+                            _LOGGER.error("Auth0 error: %s - %s", error_json.get("error"), error_json.get("error_description"))
+                    except json.JSONDecodeError:
+                        pass
                     return False
 
         except Exception as err:

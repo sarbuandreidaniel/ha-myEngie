@@ -139,18 +139,26 @@ class MyEngieAPI:
                     # Token may be expired or invalid, try refresh once
                     error_text = await response.text()
                     _LOGGER.debug("Auth error response: %s", error_text)
+                    
+                    # Check if refresh token is invalid
+                    if "Token de refresh invalid" in error_text or "refresh_token" in error_text.lower():
+                        _LOGGER.error("Refresh token is invalid - re-authentication required")
+                        return {"error": True, "data": {}, "reason": "invalid_refresh_token"}
+                    
                     _LOGGER.debug("Attempting token refresh due to auth response")
                     if await self.auth_manager.refresh_access_token(self.session):
                         # Retry request with new token
                         return await self._request(method, url, params, data)
                     _LOGGER.error("Token refresh failed after auth failure")
-                    return {"error": True, "data": {}, "reason": "unauthorized"}
+                    return {"error": True, "data": {}, "reason": "token_refresh_failed"}
                 else:
+                    error_text = await response.text()
                     _LOGGER.error(
-                        "API request failed: %s %s - Status: %s",
+                        "API request failed: %s %s - Status: %s - Response: %s",
                         method,
                         url,
                         response.status,
+                        error_text[:200] if error_text else "",
                     )
                     return {"error": True, "data": {}, "status": response.status}
         except Exception as err:

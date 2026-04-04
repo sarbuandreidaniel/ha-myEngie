@@ -185,8 +185,19 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Fetch app status first and extract account identifiers
             status = await self.api.get_app_status()
+            
+            # Check if refresh token is invalid
+            if status.get("reason") == "invalid_refresh_token":
+                _LOGGER.warning("Refresh token invalid, clearing auth and re-authenticating")
+                self._is_initialized = False
+                self.auth_manager = None
+                if not await self._async_authenticate():
+                    raise UpdateFailed("Failed to re-authenticate after token invalidation")
+                # Retry the app status call
+                status = await self.api.get_app_status()
+            
             if status.get("error"):
-                _LOGGER.warning("App status check failed")
+                _LOGGER.warning("App status check failed: %s", status)
             self._extract_account_info(status.get("data"))
 
             # Fetch account data - get unread notifications
