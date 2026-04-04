@@ -137,24 +137,33 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
 
                     if lower_key in ("contract_account", "contract_account_id"):
                         if isinstance(item, (list, tuple)):
-                            self.contract_accounts.extend(str(x) for x in item if x)
+                            for x in item:
+                                if x and str(x) not in self.contract_accounts:
+                                    self.contract_accounts.append(str(x))
                         elif item:
-                            self.contract_accounts.append(str(item))
-                    elif lower_key in ("provider_account_id", "pa", "provider_id"):
-                        if item:
+                            item_str = str(item)
+                            if item_str not in self.contract_accounts:
+                                self.contract_accounts.append(item_str)
+                    elif lower_key in ("provider_account_id", "pa", "provider_id", "pa_number", "provider_number"):
+                        if item and not self.provider_account_id:
                             self.provider_account_id = str(item)
-                    elif lower_key in ("poc_number", "poc", "connection_point"):
-                        if item:
+                            _LOGGER.debug("Extracted provider_account_id (pa): %s from key: %s", self.provider_account_id, key)
+                    elif lower_key in ("poc_number", "poc", "connection_point", "point_of_connection"):
+                        if item and not self.poc_number:
                             self.poc_number = str(item)
-                    elif lower_key in ("installation_number", "installation_id"):
-                        if item:
+                            _LOGGER.debug("Extracted poc_number: %s from key: %s", self.poc_number, key)
+                    elif lower_key in ("installation_number", "installation_id", "installation"):
+                        if item and not self.installation_number:
                             self.installation_number = str(item)
-                    elif lower_key in ("pod", "point_of_delivery"):
-                        if item:
+                            _LOGGER.debug("Extracted installation_number: %s from key: %s", self.installation_number, key)
+                    elif lower_key in ("pod", "point_of_delivery", "point_of_dispatch"):
+                        if item and not self.pod:
                             self.pod = str(item)
+                            _LOGGER.debug("Extracted pod: %s from key: %s", self.pod, key)
                     elif lower_key in ("account_id", "id") and not self.account_id:
                         if item and str(item).isdigit():
                             self.account_id = str(item)
+                            _LOGGER.debug("Extracted account_id: %s from key: %s", self.account_id, key)
 
                     search(item)
             elif isinstance(value, (list, tuple)):
@@ -166,6 +175,7 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
         # Use contract account as account_id if not already set
         if not self.account_id and self.contract_accounts:
             self.account_id = self.contract_accounts[0]
+            _LOGGER.debug("Set account_id from contract_accounts: %s", self.account_id)
 
         # Normalize unique accounts
         self.contract_accounts = list(dict.fromkeys(self.contract_accounts))
@@ -218,6 +228,8 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 balance_details = await self.api.get_balance_details(self.contract_accounts)
                 if not balance_details.get("error"):
                     data = balance_details.get("data", {})
+                    # Extract account info from balance details response
+                    self._extract_account_info(balance_details.get("data"))
                     total_balance = data.get("total", "0.00")
                     invoices = data.get("invoices", [])
                     pending = data.get("pending", [])
@@ -260,6 +272,8 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 balance_widget = await self.api.get_balance_widget(self.contract_accounts)
                 if not balance_widget.get("error"):
                     balance_details_data = balance_widget.get("data", {})
+                    # Extract account info from balance widget response
+                    self._extract_account_info(balance_widget.get("data"))
             else:
                 _LOGGER.warning("No contract accounts available, skipping balance widget fetch")
 
@@ -277,9 +291,14 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Could not fetch banners: %s", err)
             else:
                 _LOGGER.warning(
-                    "Banner fetch skipped because account_id or pa is missing: account_id=%s pa=%s",
+                    "Banner fetch skipped - missing required fields. account_id=%s, pa=%s. "
+                    "Extracted data: contract_accounts=%s, poc=%s, installation=%s, pod=%s",
                     self.account_id,
                     self.provider_account_id,
+                    self.contract_accounts,
+                    self.poc_number,
+                    self.installation_number,
+                    self.pod,
                 )
 
             # Compile data
