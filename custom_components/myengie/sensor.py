@@ -52,7 +52,7 @@ class MyEngieBalanceSensor(CoordinatorEntity, SensorEntity):
     """Sensor for MyEngie balance."""
 
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_name = "MyEngie Balance"
+    _attr_name = "Balance"
     _attr_native_unit_of_measurement = "RON"
     _attr_icon = "mdi:currency-eur"
 
@@ -84,7 +84,7 @@ class MyEngieBalanceSensor(CoordinatorEntity, SensorEntity):
 class MyEngieGasIndexSensor(CoordinatorEntity, SensorEntity):
     """Sensor for MyEngie gas index."""
 
-    _attr_name = "MyEngie Gas Index"
+    _attr_name = "Gas Index"
     _attr_icon = "mdi:gauge"
     _attr_native_unit_of_measurement = "m³"
 
@@ -129,7 +129,7 @@ class MyEngieGasIndexSensor(CoordinatorEntity, SensorEntity):
 class MyEngieNotificationsSensor(CoordinatorEntity, SensorEntity):
     """Sensor for MyEngie unread notifications."""
 
-    _attr_name = "MyEngie Unread Notifications"
+    _attr_name = "Unread Notifications"
     _attr_icon = "mdi:bell"
 
     def __init__(self, coordinator, config_entry):
@@ -160,7 +160,7 @@ class MyEngieNotificationsSensor(CoordinatorEntity, SensorEntity):
 class MyEngieConsumptionDetailsSensor(CoordinatorEntity, SensorEntity):
     """Sensor for consumption details and additional information."""
 
-    _attr_name = "MyEngie Consumption Details"
+    _attr_name = "Consumption Details"
     _attr_icon = "mdi:chart-line"
 
     def __init__(self, coordinator, config_entry):
@@ -222,7 +222,7 @@ class MyEngieConsumptionDetailsSensor(CoordinatorEntity, SensorEntity):
 class MyEngieUpToDateStatusSensor(CoordinatorEntity, SensorEntity):
     """Sensor for account status (up to date or not)."""
 
-    _attr_name = "MyEngie Account Status"
+    _attr_name = "Account Status"
     _attr_icon = "mdi:check-circle"
 
     def __init__(self, coordinator, config_entry):
@@ -254,7 +254,7 @@ class MyEngieUpToDateStatusSensor(CoordinatorEntity, SensorEntity):
 class MyEngieInvoiceCountSensor(CoordinatorEntity, SensorEntity):
     """Sensor for invoice count."""
 
-    _attr_name = "MyEngie Invoice Count"
+    _attr_name = "Invoice Count"
     _attr_icon = "mdi:file-document"
 
     def __init__(self, coordinator, config_entry):
@@ -305,7 +305,7 @@ class MyEngieInvoiceCountSensor(CoordinatorEntity, SensorEntity):
 class MyEngiePendingPaymentsSensor(CoordinatorEntity, SensorEntity):
     """Sensor for pending payments."""
 
-    _attr_name = "MyEngie Pending Payments"
+    _attr_name = "Pending Payments"
     _attr_icon = "mdi:alert-circle"
     _attr_native_unit_of_measurement = "RON"
 
@@ -366,7 +366,7 @@ class MyEngiePendingPaymentsSensor(CoordinatorEntity, SensorEntity):
 class MyEngieLatestInvoiceSensor(CoordinatorEntity, SensorEntity):
     """Sensor for latest invoice details."""
 
-    _attr_name = "MyEngie Latest Invoice"
+    _attr_name = "Latest Invoice"
     _attr_icon = "mdi:file-invoice"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = "RON"
@@ -435,20 +435,22 @@ class MyEngieInvoiceHistoryYearSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self.config_entry = config_entry
         self._year = year
-        self._attr_name = f"MyEngie Invoice History {year}"
+        self._attr_name = f"Invoice History {year}"
         self._attr_unique_id = (
             f"{DOMAIN}_{config_entry.entry_id}_invoice_history_{year}"
         )
 
     def _get_year_invoices(self):
-        """Return invoices filtered for this sensor's year."""
+        """Return invoices for this sensor's year (Jan 1 – Dec 31), sorted by date ascending."""
         if not self.coordinator.data:
             return []
         history = self.coordinator.data.get("invoice_history", [])
-        return [
+        year_str = str(self._year)
+        filtered = [
             inv for inv in history
-            if str(inv.get("invoiced_at", ""))[:4] == str(self._year)
+            if str(inv.get("invoiced_at", ""))[:4] == year_str
         ]
+        return sorted(filtered, key=lambda inv: str(inv.get("invoiced_at", "")))
 
     @property
     def native_value(self):
