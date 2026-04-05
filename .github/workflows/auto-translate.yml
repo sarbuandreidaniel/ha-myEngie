@@ -1,0 +1,78 @@
+name: Auto Translate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'custom_components/myengie/translations/en.json'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install deep-translator
+
+      - name: Translate missing strings
+        id: translate
+        run: |
+          python .github/scripts/translate_strings.py
+          EXIT=$?
+          if [ $EXIT -eq 2 ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          elif [ $EXIT -eq 0 ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            exit $EXIT
+          fi
+
+      - name: Bump patch version
+        if: steps.translate.outputs.changed == 'true'
+        run: |
+          python - <<'EOF'
+          import json
+          with open('custom_components/myengie/manifest.json') as f:
+              m = json.load(f)
+          major, minor, patch = m['version'].split('.')
+          m['version'] = f'{major}.{minor}.{int(patch)+1}'
+          with open('custom_components/myengie/manifest.json', 'w') as f:
+              json.dump(m, f, indent=2)
+              f.write('\n')
+          print(f"Bumped to {m['version']}")
+          EOF
+
+      - name: Create Pull Request
+        id: cpr
+        if: steps.translate.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: auto-translate new strings and bump version"
+          branch: auto-translate/patch-${{ github.run_id }}
+          delete-branch: true
+          title: "chore: auto-translate new strings and bump version"
+          body: |
+            🤖 **Automated translation PR**
+
+            New strings from `en.json` have been automatically translated to all supported languages and the patch version has been bumped.
+
+            _Created automatically by the [Auto Translate](.github/workflows/auto-translate.yml) workflow._
+          labels: translations,automated
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number != ''
+        run: gh pr merge "$NUMBER" --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
