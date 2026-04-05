@@ -226,8 +226,9 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
             # Invoice history — separate endpoint, sorted newest-first
             if self.poc_number and self.provider_account_id:
                 try:
-                    end_date_inv = date.today().isoformat()
-                    start_date_inv = (date.today() - timedelta(days=365)).isoformat()
+                    today = date.today()
+                    end_date_inv = today.strftime("%d-%m-%Y")
+                    start_date_inv = date(today.year - 1, 1, 1).strftime("%d-%m-%Y")
                     inv_hist = await self.api.get_invoice_history(
                         poc_number=self.poc_number,
                         pa=self.provider_account_id,
