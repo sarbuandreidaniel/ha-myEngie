@@ -200,6 +200,7 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
             total_balance = "0.00"
             invoices = []
             pending = []
+            invoice_history: list = []
             if self.contract_accounts:
                 balance_details = await self.api.get_balance_details(self.contract_accounts)
                 if not balance_details.get("error"):
@@ -209,6 +210,28 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                     pending = bd.get("pending", [])
             else:
                 _LOGGER.warning("No contract accounts found, skipping balance fetch")
+
+            # Invoice history — separate endpoint, sorted newest-first
+            if self.poc_number and self.provider_account_id:
+                try:
+                    end_date_inv = date.today().isoformat()
+                    start_date_inv = (date.today() - timedelta(days=365)).isoformat()
+                    inv_hist = await self.api.get_invoice_history(
+                        poc_number=self.poc_number,
+                        pa=self.provider_account_id,
+                        start_date=start_date_inv,
+                        end_date=end_date_inv,
+                    )
+                    if not inv_hist.get("error"):
+                        # Response: data is a list of contract-account groups,
+                        # each with an "invoices" key containing the actual invoices.
+                        raw = inv_hist.get("data", [])
+                        if isinstance(raw, list):
+                            for group in raw:
+                                if isinstance(group, dict):
+                                    invoice_history.extend(group.get("invoices", []))
+                except Exception as err:
+                    _LOGGER.debug("Could not fetch invoice history: %s", err)
 
             # Index data — installation_number and pod are discovered from the response
             gas_index = None
@@ -294,6 +317,7 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 "gas_index": gas_index or 0,
                 "notifications": notification_count,
                 "invoices": invoices,
+                "invoice_history": invoice_history,
                 "pending": pending,
                 "next_read_dates": next_read_dates,
                 "balance_details": balance_details_data,

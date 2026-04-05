@@ -131,6 +131,15 @@ class MyEngieAPI:
             params=params,
         )
 
+    async def get_invoice_history(self, poc_number, pa, start_date, end_date):
+        """Get invoice history for a given date range."""
+        params = {"startDate": start_date, "endDate": end_date, "pa": pa}
+        return await self._request(
+            "GET",
+            f"{API_BASE_URL}/v1/invoices/history-only/{poc_number}",
+            params=params,
+        )
+
     async def _request(self, method, url, params=None, data=None):
         """Make API request with automatic token refresh."""
         access_token = self.auth_manager.access_token
@@ -541,6 +550,31 @@ async def test_auth():
                     print(f"❌ get_index_prognosis error: {e}")
             else:
                 print(f"⚠️  Skipped - missing poc_number ({_poc}), pa ({_pa}), or installation_number ({installation_number})")
+
+            # ----------------------------------------------------------------
+            # 12. get_invoice_history  (needs poc_number, pa)
+            # ----------------------------------------------------------------
+            print("\n📡 Testing get_invoice_history()...")
+            if _poc and _pa:
+                try:
+                    inv_hist_data = await api.get_invoice_history(
+                        poc_number=_poc, pa=_pa,
+                        start_date=one_year_ago, end_date=today,
+                    )
+                    if inv_hist_data.get('error'):
+                        print(f"❌ get_invoice_history failed: {inv_hist_data}")
+                    else:
+                        print("✅ get_invoice_history successful!")
+                        raw = inv_hist_data.get('data', [])
+                        print(f"   📊 Total invoices: {len(raw) if isinstance(raw, list) else 'N/A'}")
+                        if isinstance(raw, list) and raw:
+                            print(f"   📄 First invoice keys: {list(raw[0].keys())}")
+                            print(f"   📄 First invoice: {json.dumps(raw[0], indent=4)}")
+                        print(f"   📄 Full response: {json.dumps(inv_hist_data, indent=2)}")
+                except Exception as e:
+                    print(f"❌ get_invoice_history error: {e}")
+            else:
+                print(f"⚠️  Skipped - missing poc_number or pa")
 
             # ----------------------------------------------------------------
             # Summary

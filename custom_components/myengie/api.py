@@ -92,6 +92,25 @@ class MyEngieAPI:
         """Get user invitations."""
         return await self._request("GET", f"{API_BASE_URL}/v1/invitations")
 
+    async def get_invoice_history(
+        self,
+        poc_number: str,
+        pa: str,
+        start_date: str,
+        end_date: str,
+    ) -> Dict[str, Any]:
+        """Get invoice history for a given date range."""
+        params = {
+            "startDate": start_date,
+            "endDate": end_date,
+            "pa": pa,
+        }
+        return await self._request(
+            "GET",
+            f"{API_BASE_URL}/v1/invoices/history-only/{poc_number}",
+            params=params,
+        )
+
     async def get_index_consumption(
         self,
         poc_number: str,

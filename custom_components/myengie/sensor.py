@@ -380,13 +380,12 @@ class MyEngieLatestInvoiceSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Return the latest invoice amount."""
         if self.coordinator.data:
-            invoices = self.coordinator.data.get("invoices", [])
-            if invoices:
-                # Get the first (most recent) invoice amount
-                amount = invoices[0].get("amount")
+            history = self.coordinator.data.get("invoice_history", [])
+            if history:
+                amount = history[0].get("total")
                 if amount:
                     try:
-                        return float(amount)
+                        return float(str(amount).replace(",", "."))
                     except (ValueError, TypeError):
                         return None
         return None
@@ -397,14 +396,17 @@ class MyEngieLatestInvoiceSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return {}
 
-        invoices = self.coordinator.data.get("invoices", [])
-        if invoices:
-            latest = invoices[0]
+        history = self.coordinator.data.get("invoice_history", [])
+        if history:
+            latest = history[0]
             return {
-                "date": latest.get("date"),
-                "amount": latest.get("amount"),
-                "status": latest.get("status"),
+                "invoice_number": latest.get("invoice_number"),
+                "date": latest.get("invoiced_at"),
                 "due_date": latest.get("due_date"),
+                "amount": latest.get("total"),
+                "paid": latest.get("unpaid", 0) == 0,
+                "division": latest.get("division"),
+                "download_url": latest.get("download_url"),
             }
         return {}
 
@@ -436,19 +438,18 @@ class MyEngieInvoiceHistoryDetailsSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Return summary of invoice history."""
         if self.coordinator.data:
-            invoices = self.coordinator.data.get("invoices", [])
-            if invoices:
-                # Calculate average invoice amount
+            history = self.coordinator.data.get("invoice_history", [])
+            if history:
                 try:
                     total = sum(
-                        float(inv.get("amount", 0)) 
-                        for inv in invoices
-                        if inv.get("amount")
+                        float(str(inv.get("total", 0)).replace(",", "."))
+                        for inv in history
+                        if inv.get("total")
                     )
-                    average = total / len(invoices) if invoices else 0
+                    average = total / len(history)
                     return f"{average:.2f} RON (avg)"
                 except (ValueError, TypeError):
-                    return f"{len(invoices)} invoices"
+                    return f"{len(history)} invoices"
             return "No invoices"
         return None
 
@@ -458,31 +459,34 @@ class MyEngieInvoiceHistoryDetailsSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return {}
 
-        invoices = self.coordinator.data.get("invoices", [])
-        if invoices:
+        history = self.coordinator.data.get("invoice_history", [])
+        if history:
             try:
                 total_amount = sum(
-                    float(inv.get("amount", 0)) 
-                    for inv in invoices
-                    if inv.get("amount")
+                    float(str(inv.get("total", 0)).replace(",", "."))
+                    for inv in history
+                    if inv.get("total")
                 )
-                average_amount = total_amount / len(invoices)
+                average_amount = total_amount / len(history)
             except (ValueError, TypeError):
                 total_amount = 0
                 average_amount = 0
 
             return {
-                "invoice_count": len(invoices),
+                "invoice_count": len(history),
                 "total_amount": f"{total_amount:.2f}",
                 "average_amount": f"{average_amount:.2f}",
                 "invoices": [
                     {
-                        "date": inv.get("date"),
-                        "amount": inv.get("amount"),
-                        "status": inv.get("status"),
+                        "invoice_number": inv.get("invoice_number"),
+                        "date": inv.get("invoiced_at"),
                         "due_date": inv.get("due_date"),
+                        "amount": inv.get("total"),
+                        "paid": inv.get("unpaid", 0) == 0,
+                        "division": inv.get("division"),
+                        "download_url": inv.get("download_url"),
                     }
-                    for inv in invoices[:10]  # Last 10 invoices
+                    for inv in history[:10]
                 ]
             }
         return {"invoice_count": 0}
