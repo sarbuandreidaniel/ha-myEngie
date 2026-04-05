@@ -73,7 +73,7 @@ class MyEngieBalanceSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -118,7 +118,7 @@ class MyEngieGasIndexSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -149,7 +149,7 @@ class MyEngieNotificationsSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -211,7 +211,7 @@ class MyEngieConsumptionDetailsSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -243,7 +243,7 @@ class MyEngieUpToDateStatusSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -294,7 +294,7 @@ class MyEngieInvoiceCountSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -355,7 +355,7 @@ class MyEngiePendingPaymentsSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -415,7 +415,7 @@ class MyEngieLatestInvoiceSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }
 
@@ -496,6 +496,6 @@ class MyEngieInvoiceHistoryDetailsSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return {
             "identifiers": {(DOMAIN, self.config_entry.entry_id)},
-            "name": "MyEngie",
+            "name": self.coordinator.data.get("place_name", "MyEngie") if self.coordinator.data else "MyEngie",
             "manufacturer": "ENGIE Romania",
         }

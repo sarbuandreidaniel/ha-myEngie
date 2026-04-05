@@ -183,6 +183,18 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
             else:
                 _LOGGER.warning("placesofconsumption failed: %s", placesofconsumption)
 
+            # Contracts — source for user-defined place alias/name
+            place_name = "MyEngie"
+            contracts = await self.api.get_contracts()
+            if not contracts.get("error"):
+                contracts_data = contracts.get("data", [])
+                if isinstance(contracts_data, list) and contracts_data:
+                    alias = contracts_data[0].get("alias", "")
+                    if alias and alias.strip():
+                        place_name = alias.strip()
+            else:
+                _LOGGER.warning("contracts fetch failed: %s", contracts)
+
             # Notifications count
             notification_count = 0
             notifications = await self.api.get_unread_notifications()
@@ -325,6 +337,7 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 "index_history": index_history,
                 "is_up_to_date": len(pending) == 0,
                 "invoice_count": len(invoices),
+                "place_name": place_name,
             }
 
             _LOGGER.debug("Successfully fetched MyEngie data")
