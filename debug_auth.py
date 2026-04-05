@@ -8,8 +8,12 @@ import asyncio
 import aiohttp
 import json
 import logging
-import sys
 import os
+import sys
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Auth0 configuration
 AUTH0_DOMAIN = "auth.engie.ro"
@@ -31,25 +35,6 @@ class MyEngieAPI:
     async def get_app_status(self):
         """Get application status."""
         return await self._request("GET", f"{API_BASE_URL}/v2/app_status")
-
-    async def get_userinfo(self):
-        """Get user info from Auth0."""
-        headers = {
-            "Authorization": f"Bearer {self.auth_manager.id_token}",
-            "Accept": "application/json",
-        }
-        try:
-            async with self.session.get(
-                f"{AUTH0_ENDPOINT}/userinfo",
-                headers=headers,
-            ) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    error_text = await response.text()
-                    return {"error": True, "status": response.status, "reason": error_text[:200]}
-        except Exception as err:
-            return {"error": True, "reason": str(err)}
 
     async def get_placesofconsumption(self):
         """Get places of consumption data."""
@@ -269,19 +254,29 @@ async def test_auth():
     print("MyEngie Authentication Debug Tool")
     print("=" * 40)
 
-    username = input("Enter your ENGIE email/username: ").strip()
-    password = input("Enter your ENGIE password: ")
+    success = False
+    token_data = {}
+    session_ctx = aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False))
 
-    if not username or not password:
-        print("❌ Username and password are required")
-        return
+    async with session_ctx as session:
+        while not success:
+            env_user = os.getenv("ENGIE_USERNAME", "").strip()
+            env_pass = os.getenv("ENGIE_PASSWORD", "")
+            username = env_user or input("Enter your ENGIE email/username: ").strip()
+            password = env_pass or input("Enter your ENGIE password: ")
 
-    print(f"\n🔐 Attempting authentication for: {username}")
-    print("⏳ Please wait...")
+            if not username or not password:
+                print("❌ Username and password are required")
+                continue
 
-    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(verify_ssl=False)) as session:
-        auth_manager = Auth0Manager()
-        success, token_data = await auth_manager.authenticate(session, username, password)
+            print(f"\n🔐 Attempting authentication for: {username}")
+            print("⏳ Please wait...")
+
+            auth_manager = Auth0Manager()
+            success, token_data = await auth_manager.authenticate(session, username, password)
+
+            if not success:
+                print("\n❌ Authentication failed. Please try again.\n")
 
         if success:
             print("✅ Authentication successful!")
@@ -321,22 +316,7 @@ async def test_auth():
                 print(f"❌ get_app_status error: {e}")
 
             # ----------------------------------------------------------------
-            # 2. get_userinfo (Auth0)
-            # ----------------------------------------------------------------
-            print("\n📡 Testing Auth0 userinfo...")
-            try:
-                userinfo_data = await api.get_userinfo()
-                if userinfo_data.get('error'):
-                    print(f"❌ userinfo failed: {userinfo_data}")
-                else:
-                    print("✅ userinfo successful!")
-                    print(f"📊 Keys: {list(userinfo_data.keys())}")
-                    print(f"📄 Data: {json.dumps(userinfo_data, indent=2)}")
-            except Exception as e:
-                print(f"❌ userinfo error: {e}")
-
-            # ----------------------------------------------------------------
-            # 3. get_placesofconsumption  ← KEY endpoint for pa/poc/installation
+            # 2. get_placesofconsumption  ← KEY endpoint for pa/poc/installation
             # ----------------------------------------------------------------
             print("\n📡 Testing get_placesofconsumption()...")
             try:
@@ -557,20 +537,35 @@ async def test_auth():
             print("\n📡 Testing get_invoice_history()...")
             if _poc and _pa:
                 try:
-                    inv_hist_data = await api.get_invoice_history(
+                    from datetime import date as _date
+                    _today = _date.today()
+                    _prev_year = _today.year - 1
+
+                    # Previous year
+                    print(f"   Fetching previous year ({_prev_year})...")
+                    inv_hist_prev = await api.get_invoice_history(
                         poc_number=_poc, pa=_pa,
-                        start_date=one_year_ago, end_date=today,
+                        start_date=_date(_prev_year, 1, 1).isoformat(),
+                        end_date=_date(_prev_year, 12, 31).isoformat(),
                     )
-                    if inv_hist_data.get('error'):
-                        print(f"❌ get_invoice_history failed: {inv_hist_data}")
+                    if inv_hist_prev.get('error'):
+                        print(f"❌ get_invoice_history (prev year) failed: {inv_hist_prev}")
                     else:
-                        print("✅ get_invoice_history successful!")
-                        raw = inv_hist_data.get('data', [])
-                        print(f"   📊 Total invoices: {len(raw) if isinstance(raw, list) else 'N/A'}")
-                        if isinstance(raw, list) and raw:
-                            print(f"   📄 First invoice keys: {list(raw[0].keys())}")
-                            print(f"   📄 First invoice: {json.dumps(raw[0], indent=4)}")
-                        print(f"   📄 Full response: {json.dumps(inv_hist_data, indent=2)}")
+                        print(f"✅ Previous year successful!")
+                        print(f"   📄 Full response: {json.dumps(inv_hist_prev, indent=2)}")
+
+                    # Current year
+                    print(f"   Fetching current year ({_today.year})...")
+                    inv_hist_curr = await api.get_invoice_history(
+                        poc_number=_poc, pa=_pa,
+                        start_date=_date(_today.year, 1, 1).isoformat(),
+                        end_date=_today.isoformat(),
+                    )
+                    if inv_hist_curr.get('error'):
+                        print(f"❌ get_invoice_history (curr year) failed: {inv_hist_curr}")
+                    else:
+                        print(f"✅ Current year successful!")
+                        print(f"   📄 Full response: {json.dumps(inv_hist_curr, indent=2)}")
                 except Exception as e:
                     print(f"❌ get_invoice_history error: {e}")
             else:

@@ -227,18 +227,31 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
             if self.poc_number and self.provider_account_id:
                 try:
                     today = date.today()
-                    end_date_inv = today.strftime("%d-%m-%Y")
-                    start_date_inv = date(today.year - 1, 1, 1).strftime("%d-%m-%Y")
-                    inv_hist = await self.api.get_invoice_history(
+                    prev_year = today.year - 1
+
+                    # Fetch previous year (Jan 1 – Dec 31, max 12 months)
+                    inv_hist_prev = await self.api.get_invoice_history(
                         poc_number=self.poc_number,
                         pa=self.provider_account_id,
-                        start_date=start_date_inv,
-                        end_date=end_date_inv,
+                        start_date=date(prev_year, 1, 1).isoformat(),
+                        end_date=date(prev_year, 12, 31).isoformat(),
                     )
-                    if not inv_hist.get("error"):
-                        # Response: data is a list of contract-account groups,
-                        # each with an "invoices" key containing the actual invoices.
-                        raw = inv_hist.get("data", [])
+                    if not inv_hist_prev.get("error"):
+                        raw = inv_hist_prev.get("data", [])
+                        if isinstance(raw, list):
+                            for group in raw:
+                                if isinstance(group, dict):
+                                    invoice_history.extend(group.get("invoices", []))
+
+                    # Fetch current year (Jan 1 – today)
+                    inv_hist_curr = await self.api.get_invoice_history(
+                        poc_number=self.poc_number,
+                        pa=self.provider_account_id,
+                        start_date=date(today.year, 1, 1).isoformat(),
+                        end_date=today.isoformat(),
+                    )
+                    if not inv_hist_curr.get("error"):
+                        raw = inv_hist_curr.get("data", [])
                         if isinstance(raw, list):
                             for group in raw:
                                 if isinstance(group, dict):
