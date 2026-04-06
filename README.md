@@ -3,9 +3,9 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![GitHub Release](https://img.shields.io/github/v/release/sarbuandreidaniel/ha-myEngie?style=flat-square&label=Versiune)](https://github.com/sarbuandreidaniel/ha-myEngie/releases)
 [![HA Min Version](https://img.shields.io/badge/Home%20Assistant-%3E%3D2024.1.0-blue?style=flat-square)](https://www.home-assistant.io)
-[![License: MIT](https://img.shields.io/badge/Licență-MIT-green.svg?style=flat-square)](LICENSE)
-[![Susține proiectul](https://img.shields.io/badge/Susține-Buy%20Me%20a%20Coffee-yellow?style=flat-square&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/sarbuandreidaniel)
-[![Revolut](https://img.shields.io/badge/Donează-Revolut-blue?style=flat-square&logo=revolut)](https://revolut.me/andreisarbu/pocket/BPJpX9dppQ)
+[![License: MIT](https://img.shields.io/badge/Licen%C8%9B%C4%83-MIT-green.svg?style=flat-square)](LICENSE)
+[![Susține](https://img.shields.io/badge/Sus%C8%9Bine-Buy%20Me%20a%20Coffee-yellow?style=flat-square&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/sarbuandreidaniel)
+[![Revolut](https://img.shields.io/badge/Sus%C8%9Bine--m%C4%83%20prin-Revolut-blue?style=flat-square&logo=revolut)](https://revolut.me/andreisarbu/pocket/BPJpX9dppQ)
 
 O integrare profesională pentru Home Assistant care conectează contul tău **MyEngie România** direct la platforma de smart home. Monitorizează consumul de gaze, soldul contului, facturile și mult mai mult — totul dintr-un singur loc.
 
@@ -185,9 +185,9 @@ Pull request-urile sunt binevenite. Te rugăm să deschizi un issue înainte de 
 
 Dacă această integrare îți economisește timp și îți face casa mai inteligentă, poți susține dezvoltarea ei:
 
-[![Susține cu o cafea](https://img.shields.io/badge/Cumpără--mi%20o%20cafea-Susține%20proiectul-yellow?style=for-the-badge&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/sarbuandreidaniel)
+[![Susține cu o cafea](https://img.shields.io/badge/Cump%C4%83r%C4%83--mi%20o%20cafea-Sus%C8%9Bine%20proiectul-yellow?style=for-the-badge&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/sarbuandreidaniel)
 
-[![Donează prin Revolut](https://img.shields.io/badge/Donează%20prin-Revolut-blue?style=for-the-badge&logo=revolut)](https://revolut.me/andreisarbu/pocket/BPJpX9dppQ)
+[![Susține-mă prin Revolut](https://img.shields.io/badge/Sus%C8%9Bine--m%C4%83%20prin-Revolut-blue?style=for-the-badge&logo=revolut)](https://revolut.me/andreisarbu/pocket/BPJpX9dppQ)
 
 ---
 
