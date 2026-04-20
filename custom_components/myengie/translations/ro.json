@@ -64,12 +64,6 @@
       "monthly_avg_m3": {
         "name": "Consum mediu lunar"
       },
-      "notifications": {
-        "name": "Notificări necitite"
-      },
-      "consumption_details": {
-        "name": "Detalii consum"
-      },
       "invoice_count": {
         "name": "Număr facturi"
       },

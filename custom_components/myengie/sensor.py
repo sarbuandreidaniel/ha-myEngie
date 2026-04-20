@@ -563,7 +563,7 @@ class MyEngieInvoiceAmountSensor(MyEngiePlaceSensor):
     _attr_translation_key = "invoice_amount"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = CURRENCY_RON
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
     _attr_icon = "mdi:file-document"
 
@@ -718,7 +718,7 @@ class MyEngieMonthlyAvgConsumptionSensor(MyEngiePlaceSensor):
     _attr_translation_key = "monthly_avg_m3"
     _attr_device_class = SensorDeviceClass.GAS
     _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 1
     _attr_icon = "mdi:chart-bar"
 
