@@ -1,10 +1,11 @@
-"""Number platform for MyEngie integration — gas index input staging."""
+"""Button platform for MyEngie integration — gas index submission."""
 
 import logging
 
-from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
@@ -19,12 +20,12 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up number entities for MyEngie."""
+    """Set up button entities for MyEngie."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
 
-    def build_place_entities(place_keys: list[str]) -> list[NumberEntity]:
+    def build_place_entities(place_keys: list[str]) -> list[ButtonEntity]:
         return [
-            MyEngieGasIndexNumber(coordinator, config_entry, place_key)
+            MyEngieSubmitGasIndexButton(coordinator, config_entry, place_key)
             for place_key in place_keys
         ]
 
@@ -47,26 +48,21 @@ async def async_setup_entry(
     )
 
 
-class MyEngieGasIndexNumber(CoordinatorEntity, NumberEntity):
-    """Number entity for staging a new gas meter index before submission."""
+class MyEngieSubmitGasIndexButton(CoordinatorEntity, ButtonEntity):
+    """Button that submits the staged gas index to ENGIE."""
 
     _attr_has_entity_name = True
-    _attr_name = "New Gas Index"
-    _attr_icon = "mdi:counter"
-    _attr_native_min_value = 0
-    _attr_native_max_value = 999999
-    _attr_native_step = 1
-    _attr_mode = NumberMode.BOX
+    _attr_name = "Submit Gas Index"
+    _attr_icon = "mdi:send"
 
     def __init__(self, coordinator, config_entry, place_key: str):
-        """Initialize the number entity."""
+        """Initialize the button entity."""
         super().__init__(coordinator)
         self.config_entry = config_entry
         self._place_key = place_key
 
         place_data = (coordinator.data or {}).get("places", {}).get(place_key, {})
         poc_number = place_data.get("poc_number", "")
-        # Reuse the same slug logic as sensors for consistent entity IDs
         place_name = str(place_data.get("place_name", "")).strip()
         if place_name and place_name.lower() not in {
             "myengie",
@@ -78,7 +74,7 @@ class MyEngieGasIndexNumber(CoordinatorEntity, NumberEntity):
         else:
             base_slug = slugify(place_key) or place_key
 
-        object_id = f"{DOMAIN}_{base_slug}_gas_index_input"
+        object_id = f"{DOMAIN}_{base_slug}_gas_index_submit"
         self._attr_unique_id = object_id
         self._attr_suggested_object_id = object_id
 
@@ -102,42 +98,62 @@ class MyEngieGasIndexNumber(CoordinatorEntity, NumberEntity):
         }
 
     @property
-    def native_value(self) -> float | None:
-        """Return staged value if set, otherwise the latest confirmed index."""
+    def available(self) -> bool:
+        """Only available during the index submission window."""
+        return bool(self.place_data.get("permite_index", False))
+
+    async def async_press(self) -> None:
+        """Submit the staged gas index (or current index as fallback)."""
+        place_data = self.place_data
+        poc_number = place_data.get("poc_number")
+        installation_number = place_data.get("installation_number")
+
+        if not poc_number or not installation_number:
+            raise HomeAssistantError(
+                "Cannot submit index: missing POC number or installation number"
+            )
+
+        # Read the value staged by the number entity, fall back to current index
         pending = (
             self.hass.data.get(DOMAIN, {})
             .get(self.config_entry.entry_id, {})
             .get("pending_gas_index", {})
         )
-        if self._place_key in pending:
-            return float(pending[self._place_key])
-        index = self.place_data.get("gas_index", 0)
-        try:
-            return float(index)
-        except (TypeError, ValueError):
-            return None
+        index_value = pending.get(self._place_key)
+        if index_value is None:
+            index_value = int(place_data.get("gas_index", 0))
 
-    @property
-    def available(self) -> bool:
-        """Only available when the API reports index submission is open."""
-        return bool(self.place_data.get("permite_index", False))
+        coordinator = self.coordinator
+        api = coordinator.api
+        if not api:
+            raise HomeAssistantError("Cannot submit index: API not initialized")
 
-    @property
-    def extra_state_attributes(self) -> dict:
-        """Expose next read window and installation number."""
-        place_data = self.place_data
-        attrs: dict = {}
-        next_read = place_data.get("next_read_dates")
-        if next_read:
-            attrs["next_read_start"] = next_read.get("startDate")
-            attrs["next_read_end"] = next_read.get("endDate")
-        installation = place_data.get("installation_number")
-        if installation:
-            attrs["installation_number"] = installation
-        return attrs
+        _LOGGER.debug(
+            "Submitting gas index %s for POC %s / installation %s",
+            index_value,
+            poc_number,
+            installation_number,
+        )
 
-    async def async_set_native_value(self, value: float) -> None:
-        """Stage the value. Press the Submit Gas Index button to send it."""
-        pending = self.hass.data[DOMAIN][self.config_entry.entry_id]["pending_gas_index"]
-        pending[self._place_key] = int(value)
-        self.async_write_ha_state()
+        result = await api.submit_index(
+            poc_number=poc_number,
+            installation_number=installation_number,
+            index_value=index_value,
+        )
+
+        if result.get("error") or not result.get("data", {}).get("status"):
+            _LOGGER.error("Gas index submission failed: %s", result)
+            raise HomeAssistantError(
+                f"Gas index submission failed: {result.get('description', result)}"
+            )
+
+        _LOGGER.info(
+            "Gas index %s submitted successfully for POC %s",
+            index_value,
+            poc_number,
+        )
+
+        # Clear the staged value and refresh so the number entity reverts
+        # to showing the freshly confirmed index from the API.
+        pending.pop(self._place_key, None)
+        await coordinator.async_request_refresh()

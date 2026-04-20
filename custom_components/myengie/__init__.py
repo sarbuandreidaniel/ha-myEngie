@@ -19,7 +19,7 @@ from .const import DEFAULT_UPDATE_INTERVAL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "number"]
+PLATFORMS = ["sensor", "number", "button"]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -47,6 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
+        "pending_gas_index": {},
     }
 
     # Set up platforms
