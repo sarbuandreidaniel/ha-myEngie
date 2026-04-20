@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfVolume
+from homeassistant.const import UnitOfTime, UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -102,7 +102,6 @@ async def async_setup_entry(
                     # Latest unpaid invoice
                     MyEngieInvoiceAmountSensor(coordinator, config_entry, place_key),
                     MyEngieInvoiceDueDateSensor(coordinator, config_entry, place_key),
-                    MyEngieInvoiceNumberSensor(coordinator, config_entry, place_key),
                     MyEngieInvoiceOverdueSensor(coordinator, config_entry, place_key),
                     # Invoices
                     MyEngieInvoiceCountSensor(coordinator, config_entry, place_key),
@@ -115,7 +114,12 @@ async def async_setup_entry(
                     MyEngieInstallationNumberSensor(coordinator, config_entry, place_key),
                     # Consumption history
                     MyEngieLastMonthConsumptionSensor(coordinator, config_entry, place_key),
-                    MyEngieMonthlyAvgConsumptionSensor(coordinator, config_entry, place_key),
+                    MyEngieConsumptionHistoryYearSensor(
+                        coordinator, config_entry, place_key, current_year
+                    ),
+                    MyEngieConsumptionHistoryYearSensor(
+                        coordinator, config_entry, place_key, current_year - 1
+                    ),
                     # Invoice history
                     MyEngieInvoiceHistoryYearSensor(
                         coordinator, config_entry, place_key, current_year
@@ -425,7 +429,7 @@ class MyEngieLatestInvoiceSensor(MyEngiePlaceSensor):
         if history:
             latest = history[0]
             return {
-                "invoice_number": latest.get("invoice_number"),
+                "invoice_number": str(latest.get("invoice_number")) if latest.get("invoice_number") is not None else None,
                 "date": _to_dd_mm_yyyy(latest.get("invoiced_at")),
                 "due_date": _to_dd_mm_yyyy(latest.get("due_date")),
                 "amount": latest.get("total"),
@@ -541,7 +545,7 @@ class MyEngieDaysUntilDueSensor(MyEngiePlaceSensor):
     """Sensor for days remaining until the latest invoice is due."""
 
     _attr_translation_key = "days_until_due"
-    _attr_native_unit_of_measurement = "days"
+    _attr_native_unit_of_measurement = UnitOfTime.DAYS
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:calendar-range"
 
@@ -573,9 +577,10 @@ class MyEngieInvoiceAmountSensor(MyEngiePlaceSensor):
 
     @property
     def native_value(self) -> float | None:
-        pending = self.place_data.get("pending", [])
-        if pending:
-            return _parse_ron(pending[0].get("amount"))
+        history = self.place_data.get("invoice_history_current", [])
+        for inv in history:
+            if inv.get("unpaid", 0) != 0:
+                return _parse_ron(inv.get("total"))
         return None
 
 
@@ -591,28 +596,12 @@ class MyEngieInvoiceDueDateSensor(MyEngiePlaceSensor):
 
     @property
     def native_value(self) -> str | None:
-        pending = self.place_data.get("pending", [])
-        if pending:
-            return _to_dd_mm_yyyy(pending[0].get("due_date"))
-        return None
-
-
-class MyEngieInvoiceNumberSensor(MyEngiePlaceSensor):
-    """Sensor for the latest invoice number."""
-
-    _attr_translation_key = "invoice_number"
-    _attr_icon = "mdi:receipt"
-
-    def __init__(self, coordinator, config_entry, place_key: str) -> None:
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("invoice_number")
-
-    @property
-    def native_value(self) -> str | None:
         history = self.place_data.get("invoice_history_current", [])
-        if history:
-            return history[0].get("invoice_number")
+        for inv in history:
+            if inv.get("unpaid", 0) != 0:
+                return _to_dd_mm_yyyy(inv.get("due_date"))
         return None
+
 
 
 class MyEngieInvoiceOverdueSensor(MyEngiePlaceSensor):
@@ -692,44 +681,113 @@ class MyEngieLastMonthConsumptionSensor(MyEngiePlaceSensor):
     _attr_suggested_display_precision = 1
     _attr_icon = "mdi:fire"
 
+    _PCS = 10.861  # Puterea calorifică superioară (kWh/m³)
+
     def __init__(self, coordinator, config_entry, place_key: str) -> None:
         super().__init__(coordinator, config_entry, place_key)
         self._set_sensor_ids("last_month_m3")
 
+    def _last_month_entry(self) -> dict | None:
+        """Return the index/consumption entry for last calendar month, or None."""
+        today = date.today()
+        last_month = today.replace(day=1) - timedelta(days=1)
+        year_str = str(last_month.year)
+        month_str = f"{last_month.month:02d}"
+
+        history = self.place_data.get("index_history", [])
+        for entry in history:
+            val = str(entry.get("invoiced_at", ""))
+            if val[:4] == year_str and val[5:7] == month_str:
+                return entry
+
+        # Fallback: last entry in history
+        return history[-1] if history else None
+
     @property
     def native_value(self) -> float | None:
-        history = self.place_data.get("index_history", [])
-        if history:
-            return _extract_m3(history[-1])
-        return None
+        entry = self._last_month_entry()
+        if entry is None:
+            return None
+        raw = entry.get("consum_gaz")
+        if raw is None:
+            return None
+        try:
+            kwh = float(str(raw).replace(",", "."))
+            return round(kwh / self._PCS, 1)
+        except (ValueError, TypeError):
+            return None
 
     @property
     def extra_state_attributes(self) -> dict:
-        history = self.place_data.get("index_history", [])
-        if not history:
+        entry = self._last_month_entry()
+        if not entry:
             return {}
-        last = history[-1]
-        return {k: v for k, v in last.items() if k not in ("value", "consumption", "consum", "quantity", "index")}
+        raw = entry.get("consum_gaz")
+        return {
+            "consum_gaz_kwh": raw,
+            "pcs": self._PCS,
+            **{k: v for k, v in entry.items() if k != "consum_gaz"},
+        }
 
 
-class MyEngieMonthlyAvgConsumptionSensor(MyEngiePlaceSensor):
-    """Sensor for the monthly average gas consumption in m³."""
+class MyEngieConsumptionHistoryYearSensor(MyEngiePlaceSensor):
+    """Sensor for yearly gas consumption history in m³, with per-month attributes."""
 
-    _attr_translation_key = "monthly_avg_m3"
     _attr_device_class = SensorDeviceClass.GAS
     _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
     _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 1
-    _attr_icon = "mdi:chart-bar"
+    _attr_icon = "mdi:fire"
 
-    def __init__(self, coordinator, config_entry, place_key: str) -> None:
+    _PCS = 10.861  # Puterea calorifică superioară (kWh/m³)
+
+    def __init__(self, coordinator, config_entry, place_key: str, year: int) -> None:
         super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("monthly_avg_m3")
+        self._year = year
+        self._attr_translation_key = "consumption_history_year"
+        self._attr_translation_placeholders = {"year": str(year)}
+        self._set_sensor_ids(f"consumption_history_{year}")
+
+    def _get_year_entries(self) -> list[dict]:
+        """Return index_history entries for this year, sorted by month."""
+        history = self.place_data.get("index_history", [])
+        year_str = str(self._year)
+        return sorted(
+            [e for e in history if str(e.get("invoiced_at", ""))[:4] == year_str],
+            key=lambda e: str(e.get("invoiced_at", "")),
+        )
+
+    def _to_m3(self, entry: dict) -> float | None:
+        raw = entry.get("consum_gaz")
+        if raw is None:
+            return None
+        try:
+            return round(float(str(raw).replace(",", ".")) / self._PCS, 1)
+        except (ValueError, TypeError):
+            return None
 
     @property
     def native_value(self) -> float | None:
-        history = self.place_data.get("index_history", [])
-        values = [v for entry in history if (v := _extract_m3(entry)) is not None]
-        if not values:
+        entries = self._get_year_entries()
+        if not entries:
             return None
-        return round(sum(values) / len(values), 1)
+        total = sum(self._to_m3(e) or 0.0 for e in entries)
+        return round(total, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        entries = self._get_year_entries()
+        attrs: dict = {}
+        for entry in entries:
+            val = str(entry.get("invoiced_at", ""))
+            try:
+                month_num = int(val[5:7])
+                month_name = calendar.month_name[month_num]
+            except (ValueError, IndexError):
+                month_name = val
+            m3 = self._to_m3(entry)
+            if m3 is not None:
+                attrs[month_name] = m3
+        return attrs
+
+

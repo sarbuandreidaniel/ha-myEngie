@@ -75,6 +75,9 @@
       },
       "invoice_history_year": {
         "name": "Istoric facturi {year}"
+      },
+      "consumption_history_year": {
+        "name": "Consum gaz {year}"
       }
     },
     "number": {

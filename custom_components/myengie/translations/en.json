@@ -81,6 +81,9 @@
       },
       "invoice_history_year": {
         "name": "Invoice History {year}"
+      },
+      "consumption_history_year": {
+        "name": "Gas Consumption {year}"
       }
     },
     "number": {

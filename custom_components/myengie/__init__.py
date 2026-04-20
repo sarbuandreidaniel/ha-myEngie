@@ -364,7 +364,7 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                         consumption = await self.api.get_index_consumption(
                             poc_number=poc_number,
                             pa=pa,
-                            start_date=(today - timedelta(days=365)).isoformat(),
+                            start_date=date(today.year - 1, 1, 1).isoformat(),
                             end_date=today.isoformat(),
                         )
                         if not consumption.get("error"):
