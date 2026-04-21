@@ -40,15 +40,12 @@
       "account_status": {
         "name": "Account Status"
       },
-      "invoice_count": {
-        "name": "Invoice Count"
+      "unpaid_invoice": {
+        "name": "Unpaid Invoice"
       },
-      "pending_payments": {
-        "name": "Pending Payments"
-      },
-      "latest_invoice": {
-        "name": "Latest Invoice"
-      },
+
+
+
       "invoice_history_year": {
         "name": "Invoice History {year}"
       }

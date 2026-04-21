@@ -28,23 +28,8 @@
       "balance": {
         "name": "Balance"
       },
-      "bill_due_date": {
-        "name": "Due Date"
-      },
-      "days_until_due": {
-        "name": "Days Until Due"
-      },
-      "invoice_amount": {
-        "name": "Unpaid Invoice Amount"
-      },
-      "invoice_due_date": {
-        "name": "Invoice Due Date"
-      },
-      "invoice_number": {
-        "name": "Invoice Number"
-      },
-      "invoice_overdue": {
-        "name": "Invoice Overdue"
+      "unpaid_invoice": {
+        "name": "Unpaid Invoice"
       },
       "gas_index": {
         "name": "Gas Index"
@@ -70,15 +55,9 @@
       "consumption_details": {
         "name": "Consumption Details"
       },
-      "invoice_count": {
-        "name": "Invoice Count"
-      },
-      "pending_payments": {
-        "name": "Pending Payments"
-      },
-      "latest_invoice": {
-        "name": "Latest Invoice"
-      },
+
+
+
       "invoice_history_year": {
         "name": "Invoice History {year}"
       },

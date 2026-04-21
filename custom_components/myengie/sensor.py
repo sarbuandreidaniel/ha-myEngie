@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTime, UnitOfVolume
+from homeassistant.const import UnitOfVolume
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -97,16 +97,8 @@ async def async_setup_entry(
                 [
                     # Billing
                     MyEngieBalanceSensor(coordinator, config_entry, place_key),
-                    MyEngieBillDueDateSensor(coordinator, config_entry, place_key),
-                    MyEngieDaysUntilDueSensor(coordinator, config_entry, place_key),
-                    # Latest unpaid invoice
-                    MyEngieInvoiceAmountSensor(coordinator, config_entry, place_key),
-                    MyEngieInvoiceDueDateSensor(coordinator, config_entry, place_key),
-                    MyEngieInvoiceOverdueSensor(coordinator, config_entry, place_key),
-                    # Invoices
-                    MyEngieInvoiceCountSensor(coordinator, config_entry, place_key),
-                    MyEngiePendingPaymentsSensor(coordinator, config_entry, place_key),
-                    MyEngieLatestInvoiceSensor(coordinator, config_entry, place_key),
+                    # Latest unpaid invoice (single sensor with attributes)
+                    MyEngieUnpaidInvoiceSensor(coordinator, config_entry, place_key),
                     # Meter identifiers
                     MyEngieGasIndexSensor(coordinator, config_entry, place_key),
                     MyEngiePocNumberSensor(coordinator, config_entry, place_key),
@@ -297,149 +289,6 @@ class MyEngieGasIndexSensor(MyEngiePlaceSensor):
         return None
 
 
-class MyEngieInvoiceCountSensor(MyEngiePlaceSensor):
-    """Sensor for invoice count."""
-
-    _attr_translation_key = "invoice_count"
-    _attr_icon = "mdi:file-document"
-
-    def __init__(self, coordinator, config_entry, place_key: str):
-        """Initialize the sensor."""
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("invoice_count")
-
-    @property
-    def native_value(self):
-        """Return the state."""
-        place_data = self.place_data
-        if place_data:
-            return place_data.get("invoice_count", 0)
-        return None
-
-    @property
-    def extra_state_attributes(self):
-        """Return invoice details."""
-        place_data = self.place_data
-        if not place_data:
-            return {}
-
-        invoices = place_data.get("invoices", [])
-        if invoices:
-            return {
-                "invoices": [
-                    {
-                        "date": _to_dd_mm_yyyy(inv.get("date")),
-                        "amount": inv.get("amount"),
-                        "status": inv.get("status"),
-                    }
-                    for inv in invoices[:5]  # Last 5 invoices
-                ]
-            }
-        return {}
-
-
-class MyEngiePendingPaymentsSensor(MyEngiePlaceSensor):
-    """Sensor for pending payments."""
-
-    _attr_translation_key = "pending_payments"
-    _attr_icon = "mdi:alert-circle"
-    _attr_native_unit_of_measurement = "RON"
-
-    def __init__(self, coordinator, config_entry, place_key: str):
-        """Initialize the sensor."""
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("pending_payments")
-
-    @property
-    def native_value(self):
-        """Return the state."""
-        place_data = self.place_data
-        if place_data:
-            pending = place_data.get("pending", [])
-            if pending:
-                # Sum all pending amounts
-                total = sum(
-                    float(p.get("amount", 0)) 
-                    for p in pending
-                )
-                return total
-            return 0.0
-        return None
-
-    @property
-    def extra_state_attributes(self):
-        """Return pending payment details."""
-        place_data = self.place_data
-        if not place_data:
-            return {}
-
-        pending = place_data.get("pending", [])
-        if pending:
-            return {
-                "pending_count": len(pending),
-                "payments": [
-                    {
-                        "amount": p.get("amount"),
-                        "due_date": _to_dd_mm_yyyy(p.get("due_date")),
-                        "description": p.get("description"),
-                    }
-                    for p in pending[:5]  # First 5 pending
-                ]
-            }
-        return {"pending_count": 0}
-
-
-class MyEngieLatestInvoiceSensor(MyEngiePlaceSensor):
-    """Sensor for latest invoice details."""
-
-    _attr_translation_key = "latest_invoice"
-    _attr_icon = "mdi:receipt"
-    _attr_device_class = SensorDeviceClass.MONETARY
-
-    _attr_native_unit_of_measurement = "RON"
-
-    def __init__(self, coordinator, config_entry, place_key: str):
-        """Initialize the sensor."""
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("latest_invoice")
-
-    @property
-    def native_value(self):
-        """Return the latest invoice amount."""
-        place_data = self.place_data
-        if place_data:
-            history = place_data.get("invoice_history_current", [])
-            if history:
-                amount = history[0].get("total")
-                if amount:
-                    try:
-                        return float(str(amount).replace(",", "."))
-                    except (ValueError, TypeError):
-                        return None
-        return None
-
-    @property
-    def extra_state_attributes(self):
-        """Return latest invoice details."""
-        place_data = self.place_data
-        if not place_data:
-            return {}
-
-        history = place_data.get("invoice_history_current", [])
-        if history:
-            latest = history[0]
-            return {
-                "invoice_number": str(latest.get("invoice_number")) if latest.get("invoice_number") is not None else None,
-                "date": _to_dd_mm_yyyy(latest.get("invoiced_at")),
-                "due_date": _to_dd_mm_yyyy(latest.get("due_date")),
-                "amount": latest.get("total"),
-                "paid": latest.get("unpaid", 0) == 0,
-                "division": latest.get("division"),
-                "download_url": latest.get("download_url"),
-            }
-        return {}
-
-
 class MyEngieInvoiceHistoryYearSensor(MyEngiePlaceSensor):
     """Sensor for invoice history for a specific year."""
 
@@ -523,107 +372,53 @@ class MyEngieInvoiceHistoryYearSensor(MyEngiePlaceSensor):
 # ------------------------------------------------------------------
 
 
-class MyEngieBillDueDateSensor(MyEngiePlaceSensor):
-    """Sensor for the due date of the latest invoice."""
+class MyEngieUnpaidInvoiceSensor(MyEngiePlaceSensor):
+    """Single sensor for the latest unpaid invoice; detail fields exposed as attributes."""
 
-    _attr_translation_key = "bill_due_date"
-    _attr_icon = "mdi:calendar-clock"
-
-    def __init__(self, coordinator, config_entry, place_key: str) -> None:
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("bill_due_date")
-
-    @property
-    def native_value(self) -> str | None:
-        history = self.place_data.get("invoice_history_current", [])
-        if history:
-            return _to_dd_mm_yyyy(history[0].get("due_date"))
-        return None
-
-
-class MyEngieDaysUntilDueSensor(MyEngiePlaceSensor):
-    """Sensor for days remaining until the latest invoice is due."""
-
-    _attr_translation_key = "days_until_due"
-    _attr_native_unit_of_measurement = UnitOfTime.DAYS
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:calendar-range"
-
-    def __init__(self, coordinator, config_entry, place_key: str) -> None:
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("days_until_due")
-
-    @property
-    def native_value(self) -> int | None:
-        history = self.place_data.get("invoice_history_current", [])
-        if history:
-            return _days_until(history[0].get("due_date"))
-        return None
-
-
-class MyEngieInvoiceAmountSensor(MyEngiePlaceSensor):
-    """Sensor for the amount of the latest unpaid invoice."""
-
-    _attr_translation_key = "invoice_amount"
+    _attr_translation_key = "unpaid_invoice"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_native_unit_of_measurement = CURRENCY_RON
     _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
-    _attr_icon = "mdi:file-document"
+    _attr_icon = "mdi:file-document-alert"
 
     def __init__(self, coordinator, config_entry, place_key: str) -> None:
         super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("invoice_amount")
+        self._set_sensor_ids("unpaid_invoice")
+
+    def _unpaid_invoice(self) -> dict | None:
+        """Return the first unpaid invoice entry, or None."""
+        history = self.place_data.get("invoice_history_current", [])
+        for inv in history:
+            if inv.get("unpaid", 0) != 0:
+                return inv
+        return None
 
     @property
     def native_value(self) -> float | None:
-        history = self.place_data.get("invoice_history_current", [])
-        for inv in history:
-            if inv.get("unpaid", 0) != 0:
-                return _parse_ron(inv.get("total"))
-        return None
-
-
-class MyEngieInvoiceDueDateSensor(MyEngiePlaceSensor):
-    """Sensor for the due date of the latest unpaid invoice."""
-
-    _attr_translation_key = "invoice_due_date"
-    _attr_icon = "mdi:calendar-check"
-
-    def __init__(self, coordinator, config_entry, place_key: str) -> None:
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("invoice_due_date")
+        inv = self._unpaid_invoice()
+        return _parse_ron(inv.get("total")) if inv else None
 
     @property
-    def native_value(self) -> str | None:
-        history = self.place_data.get("invoice_history_current", [])
-        for inv in history:
-            if inv.get("unpaid", 0) != 0:
-                return _to_dd_mm_yyyy(inv.get("due_date"))
-        return None
-
-
-
-class MyEngieInvoiceOverdueSensor(MyEngiePlaceSensor):
-    """Sensor indicating whether any invoice is overdue."""
-
-    _attr_translation_key = "invoice_overdue"
-    _attr_icon = "mdi:alert-circle"
-
-    def __init__(self, coordinator, config_entry, place_key: str) -> None:
-        super().__init__(coordinator, config_entry, place_key)
-        self._set_sensor_ids("invoice_overdue")
-
-    @property
-    def native_value(self) -> bool:
-        pending = self.place_data.get("pending", [])
-        if not pending:
-            return False
-        today = date.today()
-        return any(
-            (d := _parse_date(p.get("due_date"))) is not None and d < today
-            for p in pending
-        )
+    def extra_state_attributes(self) -> dict:
+        inv = self._unpaid_invoice()
+        if not inv:
+            return {"overdue": False}
+        due_date_str = _to_dd_mm_yyyy(inv.get("due_date"))
+        days = _days_until(inv.get("due_date"))
+        overdue = days is not None and days < 0
+        attrs: dict = {
+            "due_date": due_date_str,
+            "days_until_due": days,
+            "overdue": overdue,
+        }
+        if inv.get("invoice_number") is not None:
+            attrs["invoice_number"] = str(inv["invoice_number"])
+        if inv.get("division"):
+            attrs["division"] = inv["division"]
+        if inv.get("download_url"):
+            attrs["download_url"] = inv["download_url"]
+        return attrs
 
 
 class MyEngiePocNumberSensor(MyEngiePlaceSensor):
