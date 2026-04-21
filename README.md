@@ -1,7 +1,7 @@
 # MyEngie România — Integrare Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
-[![GitHub Release](https://img.shields.io/github/v/release/sarbuandreidaniel/ha-myEngie?style=flat-square&label=Versiune)](https://github.com/sarbuandreidaniel/ha-myEngie/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/sarbuandreidaniel/myEngie?style=flat-square&label=Versiune)](https://github.com/sarbuandreidaniel/myEngie/releases)
 [![HA Min Version](https://img.shields.io/badge/Home%20Assistant-%3E%3D2024.1.0-blue?style=flat-square)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/Licen%C8%9B%C4%83-MIT-green.svg?style=flat-square)](LICENSE)
 [![Susține](https://img.shields.io/badge/Sus%C8%9Bine-Buy%20Me%20a%20Coffee-yellow?style=flat-square&logo=buy-me-a-coffee)](https://www.buymeacoffee.com/sarbuandreidaniel)
@@ -37,7 +37,7 @@ O integrare profesională pentru Home Assistant care conectează contul tău **M
 1. Asigură-te că [HACS](https://hacs.xyz/) este instalat
 2. Mergi la **HACS → Integrări → ⋮ → Depozite personalizate**
 3. Adaugă:
-   - **URL:** `https://github.com/sarbuandreidaniel/ha-myEngie`
+   - **URL:** `https://github.com/sarbuandreidaniel/myEngie`
    - **Categorie:** Integration
 4. Caută **MyEngie** și instalează
 5. Repornește Home Assistant
@@ -72,40 +72,41 @@ Integrarea creează automat câte un set complet de senzori pentru fiecare **pun
 | Senzor | Descriere | Unitate |
 |--------|-----------|---------|
 | `sensor.myengie_<loc>_balance` | Soldul curent al contului | RON |
-| `sensor.myengie_<loc>_bill_due_date` | Data scadenței ultimei facturi | dată |
-| `sensor.myengie_<loc>_days_until_due` | Zile rămase până la scadență | zile |
-| `sensor.myengie_<loc>_invoice_amount` | Suma facturii neachitate | RON |
-| `sensor.myengie_<loc>_invoice_due_date` | Scadența facturii neachitate | dată |
-| `sensor.myengie_<loc>_invoice_number` | Numărul ultimei facturi | — |
-| `sensor.myengie_<loc>_invoice_overdue` | Factură cu scadența depășită | boolean |
-| `sensor.myengie_<loc>_invoice_count` | Număr total facturi | — |
-| `sensor.myengie_<loc>_pending_payments` | Total plăți restante | RON |
-| `sensor.myengie_<loc>_latest_invoice` | Ultima factură: sumă, dată, scadență | RON |
-| `sensor.myengie_<loc>_invoice_history_AAAA` | Total facturat în anul AAAA | RON |
+| `sensor.myengie_<loc>_unpaid_invoice` | Suma facturii neachitate | RON |
 | `sensor.myengie_<loc>_gas_index` | Indexul curent de consum gaze | m³ |
 | `sensor.myengie_<loc>_poc_number` | Numărul punctului de consum (POC) | — |
 | `sensor.myengie_<loc>_pod` | Codul punctului de livrare (POD) | — |
 | `sensor.myengie_<loc>_installation_number` | Numărul instalației (contor) | — |
 | `sensor.myengie_<loc>_last_month_m3` | Consumul din luna precedentă | m³ |
-| `sensor.myengie_<loc>_monthly_avg_m3` | Media lunară a consumului (12 luni) | m³ |
+| `sensor.myengie_<loc>_consumption_history_AAAA` | Consum total gaze în anul AAAA | m³ |
+| `sensor.myengie_<loc>_invoice_history_AAAA` | Total facturat în anul AAAA | RON |
 
-> `<loc>` este derivat automat din denumirea locației sau numărul POC. Senzorii de istoric (`invoice_history_AAAA`) sunt generați automat pentru **anul curent** și **anul precedent**.
+> `<loc>` este derivat automat din denumirea locației sau numărul POC. Senzorii de istoric sunt generați automat pentru **anul curent** și **anul precedent**.
 
 ### Atribute senzori
+
+**`sensor.myengie_<loc>_unpaid_invoice`** include:
+- `due_date` — Data scadenței facturii neachitate
+- `days_until_due` — Zile rămase până la scadență
+- `overdue` — `true` dacă scadența a trecut
+- `invoice_number` — Numărul facturii
+- `division` — Divizia/tipul serviciului
 
 **`sensor.myengie_<loc>_gas_index`** include:
 - `next_read_start` — Începutul ferestrei pentru citirea indexului
 - `next_read_end` — Sfârșitul ferestrei pentru citirea indexului
 
+**`sensor.myengie_<loc>_last_month_m3`** include:
+- `consum_gaz_kwh` — Consumul în kWh (echivalent energetic)
+- `pcs` — Puterea calorifică superioară utilizată la conversie
+
+**`sensor.myengie_<loc>_consumption_history_AAAA`** include:
+- Consum lunar (m³) pentru fiecare lună disponibilă
+- `total_kwh`, `average_monthly_kwh`, `average_daily_kwh`
+
 **`sensor.myengie_<loc>_invoice_history_AAAA`** include:
 - Lista completă de facturi cu sumă și dată emisie
 - `total_invoices`, `total_amount_paid`, `average_monthly_amount`, `average_daily_amount`
-
-**`sensor.myengie_<loc>_latest_invoice`** include:
-- `invoice_number`, `date`, `due_date`, `amount`, `paid`, `division`, `download_url`
-
-**`sensor.myengie_<loc>_pending_payments`** include:
-- `pending_count`, lista plăților cu `amount`, `due_date`, `description`
 
 ---
 
@@ -117,14 +118,13 @@ Exemplu — alertă când apare o nouă factură neachitată:
 automation:
   - alias: "Factură ENGIE nouă în așteptare"
     trigger:
-      - platform: numeric_state
-        entity_id: sensor.myengie_pending_payments
-        above: 0
+      - platform: template
+        value_template: "{{ states('sensor.myengie_<loc>_unpaid_invoice') | float(0) > 0 }}"
     action:
       - service: notify.mobile_app
         data:
           title: "Factură ENGIE nouă"
-          message: "Ai o plată în așteptare de {{ states('sensor.myengie_pending_payments') }} RON"
+          message: "Ai o factură neachitată de {{ states('sensor.myengie_<loc>_unpaid_invoice') }} RON"
 ```
 
 ---
