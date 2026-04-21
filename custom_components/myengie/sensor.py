@@ -416,8 +416,6 @@ class MyEngieUnpaidInvoiceSensor(MyEngiePlaceSensor):
             attrs["invoice_number"] = str(inv["invoice_number"])
         if inv.get("division"):
             attrs["division"] = inv["division"]
-        if inv.get("download_url"):
-            attrs["download_url"] = inv["download_url"]
         return attrs
 
 
@@ -573,6 +571,7 @@ class MyEngieConsumptionHistoryYearSensor(MyEngiePlaceSensor):
     def extra_state_attributes(self) -> dict:
         entries = self._get_year_entries()
         attrs: dict = {}
+        total = 0.0
         for entry in entries:
             val = str(entry.get("invoiced_at", ""))
             try:
@@ -583,6 +582,12 @@ class MyEngieConsumptionHistoryYearSensor(MyEngiePlaceSensor):
             m3 = self._to_m3(entry)
             if m3 is not None:
                 attrs[month_name] = m3
+                total += m3
+        count = len(entries)
+        days_in_year = 366 if calendar.isleap(self._year) else 365
+        attrs["total_m3"] = round(total, 1)
+        attrs["average_monthly_m3"] = round(total / count, 1) if count else 0.0
+        attrs["average_daily_m3"] = round(total / days_in_year, 2)
         return attrs
 
 

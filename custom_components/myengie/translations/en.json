@@ -26,7 +26,7 @@
   "entity": {
     "sensor": {
       "balance": {
-        "name": "Balance"
+        "name": "Current Balance"
       },
       "unpaid_invoice": {
         "name": "Unpaid Invoice"
