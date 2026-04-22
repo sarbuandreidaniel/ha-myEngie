@@ -228,7 +228,3 @@ Licențiat sub [MIT License](LICENSE).
 ---
 
 > **Disclaimer:** Aceasta este o integrare neoficială, dezvoltată de comunitate. Nu este afiliată cu și nu este aprobată de ENGIE România. Folosești pe propria răspundere și respectând termenii și condițiile ENGIE.
-
----
-
-**Autor:** [Andrei Sarbu](https://github.com/sarbuandreidaniel) · **Actualizat:** Aprilie 2026
