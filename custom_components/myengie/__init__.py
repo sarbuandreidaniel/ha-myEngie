@@ -230,8 +230,8 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
 
             # App status — check for maintenance or invalid token, no account data here
             status = await self.api.get_app_status()
-            if status.get("reason") == "invalid_refresh_token":
-                _LOGGER.warning("Refresh token invalid, clearing auth and re-authenticating")
+            if status.get("reason") in ("invalid_refresh_token", "token_refresh_failed", "no_token"):
+                _LOGGER.warning("MyEngie auth token invalid (%s), clearing auth and re-authenticating", status.get("reason"))
                 self._is_initialized = False
                 self.auth_manager = None
                 if not await self._async_authenticate():
@@ -246,6 +246,24 @@ class MyEngieDataUpdateCoordinator(DataUpdateCoordinator):
                 self._extract_places_of_consumption(placesofconsumption.get("data"))
             else:
                 _LOGGER.warning("placesofconsumption failed: %s", placesofconsumption)
+                # Silent auth expiry: token was accepted by app_status but expired by the
+                # time we fetched places — force a full re-login and retry once.
+                _AUTH_REASONS = ("invalid_refresh_token", "token_refresh_failed", "no_token")
+                if placesofconsumption.get("reason") in _AUTH_REASONS:
+                    _LOGGER.debug(
+                        "MyEngie: silent auth expiry detected — re-authenticating"
+                    )
+                    self._is_initialized = False
+                    self.auth_manager = None
+                    if await self._async_authenticate():
+                        placesofconsumption = await self.api.get_placesofconsumption()
+                        if not placesofconsumption.get("error"):
+                            self._extract_places_of_consumption(placesofconsumption.get("data"))
+                        else:
+                            _LOGGER.warning(
+                                "MyEngie: placesofconsumption still failed after re-auth: %s",
+                                placesofconsumption,
+                            )
 
             # Contracts — source for user-defined place alias/name
             contracts = await self.api.get_contracts()
